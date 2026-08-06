@@ -17,12 +17,12 @@ Plan and build a Power Automate flow (Option 2): watch Outlook inbox, filter by 
 - Scaffolded .claude control folder, CLAUDE.md, STATUS.md
 - Wrote Option 2 implementation plan (PLAN.md) — trigger, condition, grounding, AI step, branch, error handling, all decisions resolved
 - Build via browser-automation subagent against make.powerautomate.com in BD tenant. Confirmed server-side saved state: Trigger (Outlook "When a new email arrives V3", Inbox, To=self) → Condition (no-reply/system-sender filter, §2) → True branch → Scope containing: Extract Keywords, Search Prior Emails (Outlook Search email V3), Search SharePoint Site, Search OneDrive, Compose referenceMaterial (§3b steps 1-4). Flow left Off.
+- Branch complete and verified (§3d/§4). Condition 1 (`needs_action == true`) added after Run a prompt — Parse JSON confirmed not needed, structured fields available directly. True branch: Teams "Post message in a chat or channel" to self via Chat with Flow bot + People Picker (message: action_summary only — no weblink field exists on the trigger in this tenant, dropped from message). False branch: Outlook "Create draft" (To=sender, Subject="RE: "+subject, Body=draft_reply plain token; ConversationId threading skipped — not readily available, follow-up item). Saved, verified via reload + Code view. Flow still Off.
 - AI Builder step (§3c/§3a) done and verified. Root causes fixed along the way: (1) hung agent-browser daemon fixed by killing stray process; (2) flow's deep-link environment ID was wrong (`8ac7231d-...`) — correct one is `Default-94c3e67c-9e2d-4800-a6b7-635d97882165`, found by navigating via Home → My flows instead of a hardcoded env URL; (3) discovered AI Builder's old inline-prompt flow action no longer exists in this tenant — replaced with a 2-part architecture: a named published prompt asset (`Email Draft Flow Prompt`, GPT-4.1 mini, JSON output, tested working) + a "Run a prompt" flow action that selects it and maps 4 inputs (referenceMaterial/sender/subject/body) from trigger/Compose dynamic content. Bound into the flow after Build referenceMaterial, inside Scope/True branch. Saved and confirmed persisted server-side via reload + Code view inspection. Flow ID `9d6cd058-4389-4cb8-af1e-dd15e95075b8`. Flow still Off.
 
 ### Pending Tasks
-- Parse JSON action on the "Run a prompt" output (schema: needs_action bool, action_summary string, draft_reply string) — §3d
-- Condition branch on needs_action → Teams alert (§4a) / Create draft (§4b)
-- Error-handling Scope wrapping steps 3-6, on-failure Teams notify (§5)
+- Error-handling Scope wrapping retrieval+AI+branch, on-failure Teams notify (§5)
+- Optional follow-ups (not blocking): draft signature block, Body length cap, raw-AI-JSON logging, Teams action-item message weblink (no field available — may need a workaround or drop permanently), Create draft ConversationId threading
 - Test end-to-end (trigger → condition → grounded AI draft or Teams action-item alert)
 - Leave flow Off until user explicitly turns it on
 
@@ -44,4 +44,4 @@ Plan and build a Power Automate flow (Option 2): watch Outlook inbox, filter by 
 - The flow's environment ID is `Default-94c3e67c-9e2d-4800-a6b7-635d97882165` — do not use `8ac7231d-...`, that ID caused repeated false "Network Error" pages that looked like an outage but were just a wrong URL.
 
 ### Next Action
-Add Parse JSON action on the AI output, then branch on needs_action → Teams alert (§4a) / Create draft (§4b) → error Scope (§5), then end-to-end test (§6 step 8). Keep flow Off until fully tested.
+Add error-handling Scope (§5), then end-to-end test (§6 step 8): one action-item-shaped test email (expect Teams alert, no draft) and one plain-question test email (expect grounded draft in Drafts). Keep flow Off until fully tested.
