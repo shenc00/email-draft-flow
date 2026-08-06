@@ -25,13 +25,13 @@ Plan and build a Power Automate flow (Option 2): watch Outlook inbox, filter by 
 ### Decisions
 - Repo: shenc00/email-draft-flow, public, at Documents\Github\email-draft-flow
 - Trigger scope: any email with me as direct To recipient, Inbox only, minus system/no-reply senders (see PLAN.md §2)
+- AI engine: AI Builder "Create text with GPT using a prompt" (GPT-4.1 mini), confirmed working in BD (default) environment via make.powerapps.com → AI hub → Prompts test (2026-08-06)
 
 ### Assumptions
 - User has Power Automate license/connector access to Outlook
 
 ### Risks
-- No BD AI Builder/Azure OpenAI credits confirmed (2026-08-06). Copilot Chat + GitHub Copilot ruled out — no callable API for unattended use.
-- Personal-LLM-API-key fallback (§3a) sends work email content to an external service under a personal account — needs compliance go/no-go before use.
+- None currently blocking
 
 ### Next Action
-User to check Power Platform admin center (admin.powerplatform.microsoft.com → Resources → Capacity) for free AI Builder allowance — I don't have tenant/browser access to check this myself. Report back what it shows so PLAN.md §3a can be finalized.
+Build the flow per PLAN.md §6 (all inputs now decided) — start with trigger + condition, then AI Builder prompt action.
