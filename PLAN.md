@@ -45,12 +45,13 @@ Error handling
 
 ## 3. AI step
 
-### 3a. Engine choice — RESOLVED 2026-08-06
+### 3a. Engine choice — RESOLVED 2026-08-06, updated 2026-08-06 (build-time correction)
 
 Confirmed in `make.powerapps.com` (BD (default) environment) → AI hub → Prompts → Build your own prompt → Test: real response returned, model **GPT-4.1 mini**, no license/capacity error. BD's default environment has AI Builder capacity — use it.
 
-- **Engine: AI Builder — "Create text with GPT using a prompt" action.** Same custom prompt built for testing carries forward into the flow (Power Automate can call an existing AI Builder prompt by name, or the prompt text can be re-entered directly in the flow action).
-- Model is fixed to whatever AI Builder assigns (GPT-4.1 mini as tested) — no per-call model picker in the flow action.
+- **Engine: AI Builder, two-part architecture** (discovered during build — the flow action "Create text with GPT using a prompt" referenced in the original plan no longer exists in this tenant):
+  1. **A named custom prompt asset**, built once in AI hub → Prompts, holding the actual template text, the four named inputs (`referenceMaterial`, `sender`, `subject`, `body`), the model selection, and the JSON output schema. Built as `Email Draft Flow Prompt`, model GPT-4.1 mini, output type JSON, tested with sample values, published.
+  2. **The flow action is AI Builder "Run a prompt"** (Dataverse connector) — it does not take inline prompt text; it has a single dropdown that selects a published prompt asset by name, then exposes that asset's named inputs as fields to map from flow dynamic content.
 - No auth/API key needed — runs under your own Power Platform environment, work email content never leaves BD's tenant.
 - Personal-LLM-API-key fallback (Gemini/Groq) and its compliance flag are no longer needed — dropped from the build path, kept below for reference only in case tenant capacity ever gets revoked.
 
