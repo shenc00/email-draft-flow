@@ -29,6 +29,7 @@ Plan and build a Power Automate flow (Option 2): watch Outlook inbox, filter by 
 - AI prompt now does classify+draft in one structured JSON call: needs_action / action_summary / draft_reply (PLAN.md §3c)
 - Grounding: Outlook (Search email V3) + Loop (via SharePoint search, Loop files live in OneDrive/SharePoint) covered in v1; Power BI workspace content is a known gap, no connector supports full-text search over report content (PLAN.md §3b, §8)
 - Action-item handling: Teams message to self (action_summary + email link), no draft created on that branch (PLAN.md §4a)
+- Grounding scope: entire ISC Analytics & Data Science SharePoint site (bd1.sharepoint.com/sites/GSCTransformationGlobalSupplyChain) + user's OneDrive (PLAN.md §3b)
 
 ### Assumptions
 - User has Power Automate license/connector access to Outlook
@@ -37,4 +38,4 @@ Plan and build a Power Automate flow (Option 2): watch Outlook inbox, filter by 
 - None currently blocking
 
 ### Next Action
-Pick which SharePoint site(s)/OneDrive scope the grounding search should hit (PLAN.md §7, last open item), then build per PLAN.md §6.
+All plan decisions resolved — build per PLAN.md §6.

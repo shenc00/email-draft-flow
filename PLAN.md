@@ -73,7 +73,7 @@ Decided source: Outlook, Loop, and Power BI workspaces (your answer, 2026-08-06)
 **Retrieval step** (before the AI action):
 1. Extract 2–4 keywords from the trigger email's subject (simple `split()`/`replace()` expression, no AI call needed for this).
 2. Office 365 Outlook **"Search email (V3)"** — query = keywords, top 3 results, project subject + body preview.
-3. SharePoint **"Send an HTTP request to SharePoint"** → REST search endpoint `/_api/search/query?querytext='{keywords}'` scoped to your OneDrive/relevant SharePoint sites (covers Loop files) — top 3 results, project title + snippet.
+3. SharePoint **"Send an HTTP request to SharePoint"** → REST search endpoint `/_api/search/query?querytext='{keywords}' path:"https://bd1.sharepoint.com/sites/GSCTransformationGlobalSupplyChain"` (site: **ISC Analytics & Data Science**, entire site — not scoped to one folder) plus a second call scoped to your personal OneDrive `path:"https://bd1-my.sharepoint.com/personal/<your-account>"` (covers Loop files in both) — top 3 results per source, project title + snippet.
 4. Concatenate both result sets into a single `referenceMaterial` string variable, passed into the AI prompt below.
 
 If retrieval turns up nothing relevant, `referenceMaterial` is just empty — the prompt's "don't invent facts" instruction (§3c) makes the AI fall back to a generic acknowledgment rather than fabricate, so an empty result isn't a failure mode.
@@ -163,8 +163,8 @@ Condition action, reading the Parse JSON output: `needs_action == true`.
 - ~~AI engine~~ — decided: AI Builder GPT-4.1 mini, confirmed working in BD (default) environment (§3a).
 - ~~Action-item alert channel~~ — decided: Teams message to self (§4a).
 - ~~Grounding source~~ — decided: Outlook + Loop (via SharePoint search) + Power BI (gap — no v1 coverage, see §3b table).
+- ~~Which SharePoint site(s)/OneDrive scope~~ — decided: entire ISC Analytics & Data Science site (`bd1.sharepoint.com/sites/GSCTransformationGlobalSupplyChain`) + your OneDrive (§3b step 3).
 - Exact no-reply/system sender pattern list — starter list in §2, refine after first week of real trigger hits.
-- Which SharePoint site(s)/OneDrive scope the search query should hit (§3b step 3) — needed before that action can be configured.
 
 ## 8. Out of scope (v1)
 
