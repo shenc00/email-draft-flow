@@ -141,10 +141,10 @@ Condition action, reading the Parse JSON output: `needs_action == true`.
 - `Body` = `draft_reply` token, plain mapping, no signature block yet (see §3d).
 - `ConversationId` — **deviation, skipped**: not readily available as a simple field mapping in this connector version; threading under the original email is not yet wired. Follow-up item.
 
-## 5. Error handling
+## 5. Error handling — built 2026-08-06
 
-- Wrap retrieval + AI + Parse JSON + branch in a **Scope**.
-- Parallel "Scope — On failure" branch (Configure run after = has failed) → post a Teams notification to self with the trigger email's subject, so a bad AI response or a retrieval-step failure doesn't silently vanish.
+- Retrieval + AI steps (Extract Keywords → ... → Run a prompt) already sit in a Scope (built alongside those steps). Condition 1 + branch actions sit as siblings after the Scope, inside the Condition's True branch.
+- Added Teams "Post message in a chat or channel" as a sibling after Scope/Condition 1, `runAfter: {"Scope": ["Failed"]}` — fires only if the Scope fails. Message: "Email Draft Flow failed processing an email. Subject: {trigger subject}. Check flow run history for details." Posted to self via Chat with Flow bot.
 
 ## 6. Build steps (~45–75 min — grounding + branching adds time vs the original single-path version)
 
