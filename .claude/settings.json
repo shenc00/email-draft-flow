@@ -1,0 +1,21 @@
+{
+  "permissions": {
+    "deny": [
+      "Bash(rm *)",
+      "Bash(git push --force*)",
+      "Edit(.claude/**)",
+      "Write(.claude/**)",
+      "Edit(.mcp.json)",
+      "Write(.mcp.json)"
+    ]
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          { "type": "command", "command": "cat STATUS.md 2>/dev/null || true" }
+        ]
+      }
+    ]
+  }
+}
