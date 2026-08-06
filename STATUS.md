@@ -20,7 +20,7 @@ Plan and build a Power Automate flow (Option 2): watch Outlook inbox, filter by 
 - AI Builder step (§3c) attempted twice: first attempt's "Run a prompt" action was only a local unsaved browser draft, never persisted — lost when that agent's session died. Second attempt blocked before reaching Power Automate at all — agent-browser CLI non-functional this session (hangs on trivial local commands, socket timeout `os error 10060` on initial page open). No flow changes made on 2nd attempt; nothing lost, nothing added.
 
 ### Pending Tasks
-- **Blocker: fix agent-browser tooling** before any further build steps. Retried after user re-auth (2026-08-06): `agent-browser --version` returns instantly (binary fine), but `agent-browser doctor --offline --quick` hangs indefinitely with zero output — this is a local-only diagnostic, no network call, so NOT the BD proxy/TLS interception theory. Points to a stale daemon lock/socket left over from re-auth. Try: kill any lingering agent-browser process, delete its lock/socket file, retry `doctor` in a plain foreground terminal outside Claude Code.
+- ~~Blocker: agent-browser tooling~~ — **RESOLVED 2026-08-06.** Root cause: a hung `agent-browser-win32-x64` daemon (PID 45036). Every CLI call that needs the daemon socket blocked on it indefinitely, which is why `doctor --offline --quick` hung while `--version` (no socket) returned instantly — the "offline diagnostic hangs" symptom was misleading, it was never a network/proxy issue. Fix: `Stop-Process -Id <daemon pid> -Force`. `doctor` then returned 6 pass / 0 warn / 0 fail. Saved make.powerautomate.com auth session (`~/.agent-browser/sessions/pa-flow-49700eb101c0-*.json`) survived intact. If this recurs: kill the agent-browser daemon process, re-run doctor.
 - Once unblocked: add AI Builder "Create text with GPT using a prompt" action (§3c template) after referenceMaterial Compose, inside Scope/True branch — save, checkpoint, do not proceed further unprompted.
 - Then: Parse JSON, branch on needs_action, Teams alert (§4a) / Create draft (§4b), error-handling Scope (§5)
 - Test end-to-end (trigger → condition → grounded AI draft or Teams action-item alert)
@@ -40,7 +40,7 @@ Plan and build a Power Automate flow (Option 2): watch Outlook inbox, filter by 
 
 ### Risks
 - Flow left in a partially-built, saved-but-Off state in the live BD tenant (retrieval steps only, no AI/branch/output steps yet). Low risk since it's Off and can't fire.
-- agent-browser tooling broken this session — blocks further automated build until fixed outside this conversation.
+- Power Automate's designer can silently keep new actions as local-only browser drafts — always verify a save persisted by reloading the flow, not just by seeing the action on screen. Cost one lost AI Builder step already.
 
 ### Next Action
-Fix agent-browser (`agent-browser doctor --fix` or reinstall) outside this session, then resume: add AI Builder prompt action per §3c, save, checkpoint before continuing to Parse JSON/branch/output steps. Keep flow Off until fully tested.
+AI Builder prompt step (§3c) being added now via build subagent, tooling unblocked. After it's confirmed saved: Parse JSON → branch on needs_action → Teams alert (§4a) / Create draft (§4b) → error Scope (§5), then end-to-end test. Keep flow Off until fully tested.
