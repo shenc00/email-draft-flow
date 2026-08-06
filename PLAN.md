@@ -1,6 +1,6 @@
 # Plan — Option 2: Power Automate + AI (auto-draft replies)
 
-Goal: unattended flow — new email lands → filtered by rule → AI drafts reply → saved to Drafts for human review/send. No manual click-per-email.
+Goal: unattended flow — new email lands → filtered by rule → AI drafts a **fact-grounded** reply, using your Outlook/Loop/Power BI content as reference → saved to Drafts for human review/send. If the email actually needs *you* to do something (not just reply), the flow pings you on Teams instead of faking a reply.
 
 ## 1. Flow shape
 
@@ -10,15 +10,18 @@ Trigger: Office 365 Outlook — "When a new email arrives (V3)"
    └─ To: my address (fires only when I'm a direct recipient, not just Cc'd)
 Condition — system/notification filter
    └─ Skip AI+draft if sender matches a no-reply/automated pattern
-AI action — draft reply text
-   └─ AI Builder "Create text with GPT using a prompt" (default) OR
-      Azure OpenAI connector "Get chat completion" (if quota/resource exists)
-Create draft
-   └─ Office 365 Outlook "Create draft"
-      To = trigger sender, Subject = "RE: " + trigger subject,
-      Body = AI output, ConversationId = trigger conversation id (keeps threading)
+Retrieve context (§3d)
+   └─ Search Outlook mail history + SharePoint/OneDrive (covers Loop pages) for
+      snippets related to the email's subject/keywords — feeds the AI real facts
+AI action — classify + draft (structured JSON output)
+   └─ AI Builder "Create text with GPT using a prompt"
+      Returns: { needs_action: bool, action_summary: string, draft_reply: string }
+Branch on needs_action
+   ├─ true  → Teams message to self: action_summary + link to email (§4b), NO draft
+   └─ false → Create draft (Office 365 Outlook), Body = draft_reply,
+              ConversationId = trigger conversation id (keeps threading)
 Error handling
-   └─ Scope + "Configure run after" on failure → Teams/email notify self
+   └─ Scope + "Configure run after" on failure → Teams notify self
 ```
 
 ## 2. Trigger config
@@ -57,20 +60,51 @@ Confirmed in `make.powerapps.com` (BD (default) environment) → AI hub → Prom
 HTTP action → Gemini/Groq free-tier REST endpoint, your own personal API key. **Compliance flag:** work email content would leave BD's tenant boundary to an external service under a personal account — needs IT/data-handling sign-off before use, especially for anything client/PHI/confidential.
 </details>
 
-### 3b. Prompt design
+### 3b. Grounding — Outlook / Loop / Power BI context
 
-Split into system framing + per-email content (AI Builder's Prompt Builder supports instruction text above the `{variable}` fields; Azure OpenAI does this as separate system/user messages):
+Decided source: Outlook, Loop, and Power BI workspaces (your answer, 2026-08-06). Reality check on what's actually buildable per source with native Power Automate actions, no new infra:
+
+| Source | Coverage in v1 | How |
+|---|---|---|
+| Outlook | Full | "Search email (V3)" action, query built from the incoming email's subject/keywords, pull top N matching prior threads (subject + snippet) as reference material |
+| Loop | Full (indirect) | Loop pages/components are `.loop` files stored in OneDrive/SharePoint — covered by the same SharePoint search call below, no separate Loop-specific connector exists |
+| Power BI | **Gap — not in v1** | No Power Automate connector action does full-text content search over report/dataset content. The Power BI connector only does things like export/refresh/list reports — it can't answer "what does this report say." Workaround if this matters: keep a Loop/SharePoint doc summarizing key PBI metrics/definitions in plain text — that gets picked up by the SharePoint search like any other doc. Flagged as a v1 gap, not silently dropped. |
+
+**Retrieval step** (before the AI action):
+1. Extract 2–4 keywords from the trigger email's subject (simple `split()`/`replace()` expression, no AI call needed for this).
+2. Office 365 Outlook **"Search email (V3)"** — query = keywords, top 3 results, project subject + body preview.
+3. SharePoint **"Send an HTTP request to SharePoint"** → REST search endpoint `/_api/search/query?querytext='{keywords}'` scoped to your OneDrive/relevant SharePoint sites (covers Loop files) — top 3 results, project title + snippet.
+4. Concatenate both result sets into a single `referenceMaterial` string variable, passed into the AI prompt below.
+
+If retrieval turns up nothing relevant, `referenceMaterial` is just empty — the prompt's "don't invent facts" instruction (§3c) makes the AI fall back to a generic acknowledgment rather than fabricate, so an empty result isn't a failure mode.
+
+### 3c. Prompt design
+
+AI Builder Prompt Builder supports **structured (JSON) output** — set Output type to JSON with a schema, instead of plain Text. This lets one AI call do both the "is this an action item for me" classification and the reply draft, instead of two separate calls.
 
 ```
 SYSTEM / instruction:
-You are drafting an email reply on behalf of [Your Name], [Your Title].
-Write in a professional, concise tone matching a typical business email.
-Keep it under 150 words unless the original email requires detail to answer properly.
-Never invent facts, commitments, dates, numbers, or approvals that aren't
-in the original email — if the reply requires information you don't have,
-write a short holding reply asking for time to check, instead of guessing.
-Do not add a closing signature block — that gets appended separately.
-End your draft with nothing but the reply body text.
+You are triaging and drafting a reply to an email on behalf of [Your Name], [Your Title].
+
+Reference material (facts you may cite — do not use anything outside this
+and the email itself; if it's empty, you have no extra facts available):
+{referenceMaterial}
+
+Step 1 — decide: does this email require ME to personally take an action
+(review something, approve something, complete a task, attend something,
+provide information only I have) rather than just receive a reply?
+If yes, set needs_action=true and write a one-sentence action_summary.
+Leave draft_reply empty in that case — do not draft a reply for action items.
+
+Step 2 — if needs_action=false, write draft_reply: a professional, concise
+reply (under 150 words unless the email needs detail to answer properly).
+Use ONLY facts from the reference material or the email itself — never
+invent commitments, dates, numbers, or approvals. If you lack the
+information to answer properly, write a short holding reply asking for
+time to check, instead of guessing.
+No closing signature block — that gets appended separately by the flow.
+
+Return JSON: { "needs_action": boolean, "action_summary": string, "draft_reply": string }
 
 USER / per-email content:
 From: {sender}
@@ -79,44 +113,61 @@ Body:
 {body}
 ```
 
-Guardrail reasoning: an AI reply that fabricates a commitment ("I'll have this to you by Friday") is worse than no draft at all, since it sits in Drafts looking finished and might get sent as-is. The "don't invent, ask for time instead" instruction is the single highest-value line in the prompt — test it explicitly (send a test email asking something the AI can't know) before trusting the flow with real mail.
+Guardrail reasoning: an AI reply that fabricates a commitment ("I'll have this to you by Friday") is worse than no draft at all — it sits in Drafts looking finished and might get sent as-is. The "don't invent, ask for time instead" line is the single highest-value instruction here; test it explicitly (send a test email asking something the AI can't know) before trusting the flow with real mail. Equally, the action-item split matters because a *drafted reply* to something that actually needs your personal action (approval, task, decision) risks you skimming Drafts, seeing something plausible-looking, and missing that it needed real attention — better to interrupt via Teams than to paper over it with a polished-sounding auto-reply.
 
-### 3c. Output handling
+### 3d. Output handling
 
-- Both engine options return plain text — Office 365 Outlook's "Create draft" `Body` field accepts HTML, so wrap the AI output in a minimal template before writing it: `<p>` per paragraph, then append your real signature block (stored as a flow variable, not generated by the AI) below.
-- Trim/validate length before writing to Body — cap around 2000 characters as a sanity check; if the AI response exceeds that, treat it as a failure (see §5) rather than write a bloated draft.
-- Log the raw AI output somewhere retrievable during testing (a SharePoint list row or the flow's own run history) so you can review drift in quality over the first couple weeks without re-reading every draft in Outlook.
+- Parse the AI Builder JSON response with a **Parse JSON** action (schema: `needs_action` bool, `action_summary` string, `draft_reply` string) right after the AI step — this is what the branch condition (§4) reads.
+- For the `draft_reply` path: Office 365 Outlook's "Create draft" `Body` field accepts HTML, so wrap the text in a minimal template before writing it: `<p>` per paragraph, then append your real signature block (stored as a flow variable, not generated by the AI) below.
+- Trim/validate length before writing to Body — cap around 2000 characters as a sanity check; if it exceeds that, treat it as a failure (§5) rather than write a bloated draft.
+- Log the raw AI JSON output somewhere retrievable during testing (a SharePoint list row or the flow's own run history) so you can review classification + draft quality over the first couple weeks without re-reading every draft/Teams message.
 
-## 4. Draft creation
+## 4. Branch: action item vs draft reply
+
+Condition action, reading the Parse JSON output: `needs_action == true`.
+
+### 4a. True branch — action item, notify instead of drafting
+
+- Action: Teams **"Post message in a chat or channel"** → chat with self.
+- Message: `action_summary` (from the AI) + a direct link to the email (`triggerBody()?['webLink']`) so you can jump straight to it.
+- **No Create draft call on this branch** — the point is to interrupt you, not to paper over the action item with a reply.
+
+### 4b. False branch — draft reply
 
 - Action: Office 365 Outlook **"Create draft"**.
+- `Body` = `draft_reply` (HTML-wrapped per §3d) + signature block.
 - Set `ConversationId` from the trigger to keep the draft threaded under the original email (not a new top-level message).
 - Leave `To` prefilled from sender — human just reviews/edits/sends from Drafts.
 
 ## 5. Error handling
 
-- Wrap AI + Create draft in a **Scope**.
-- Parallel "Scope — On failure" branch (Configure run after = has failed) → post a Teams/Outlook notification to self with the trigger email's subject, so a bad AI response doesn't silently vanish.
+- Wrap retrieval + AI + Parse JSON + branch in a **Scope**.
+- Parallel "Scope — On failure" branch (Configure run after = has failed) → post a Teams notification to self with the trigger email's subject, so a bad AI response or a retrieval-step failure doesn't silently vanish.
 
-## 6. Build steps (~30–60 min)
+## 6. Build steps (~45–75 min — grounding + branching adds time vs the original single-path version)
 
 1. New flow → trigger → set folder + basic filters.
-2. Add Condition for any filter logic the trigger can't express.
-3. Add AI Builder "Create text with GPT using a prompt" action, wire trigger subject/body/sender into the prompt (§3b template).
-4. Add Create draft action, map AI output → Body.
-5. Wrap 3–4 in a Scope, add failure-notify branch.
-6. Test: send yourself a matching email, confirm draft appears threaded in Drafts with sane AI text.
-7. Tune prompt / filters from test output, re-test.
-8. Turn flow on.
+2. Add Condition for any filter logic the trigger can't express (§2).
+3. Add retrieval steps: keyword extraction, Outlook Search email (V3), SharePoint HTTP search — concatenate into `referenceMaterial` (§3b).
+4. Add AI Builder prompt action with JSON output (§3c), wire in `referenceMaterial` + trigger subject/body/sender.
+5. Add Parse JSON action on the AI response (§3d).
+6. Add Condition on `needs_action`, build the two branches (§4a Teams alert / §4b Create draft).
+7. Wrap 3–6 in a Scope, add failure-notify branch (§5).
+8. Test both paths: send a test email that clearly needs action from you (confirm Teams alert, no draft), and one that's a plain reply-able question (confirm grounded draft appears threaded in Drafts).
+9. Tune prompt / retrieval / filters from test output, re-test.
+10. Turn flow on.
 
 ## 7. Open decisions (need your input before build)
 
 - ~~Which mailbox rule(s) route to this flow~~ — decided: any email with me as direct `To` recipient in Inbox, minus system/notification senders (§2).
 - ~~AI engine~~ — decided: AI Builder GPT-4.1 mini, confirmed working in BD (default) environment (§3a).
+- ~~Action-item alert channel~~ — decided: Teams message to self (§4a).
+- ~~Grounding source~~ — decided: Outlook + Loop (via SharePoint search) + Power BI (gap — no v1 coverage, see §3b table).
 - Exact no-reply/system sender pattern list — starter list in §2, refine after first week of real trigger hits.
-- Failure notification channel — Teams message vs email to self.
+- Which SharePoint site(s)/OneDrive scope the search query should hit (§3b step 3) — needed before that action can be configured.
 
 ## 8. Out of scope (v1)
 
 - Auto-send without review (this stays draft-only by design — matches the "review/send" requirement in the original comparison).
 - Multi-language reply detection.
+- Power BI workspace content as a grounding source (§3b) — no native connector action for full-text search over report/dataset content; use a maintained SharePoint/Loop summary doc as a workaround if needed.
