@@ -6,10 +6,10 @@ Goal: unattended flow — new email lands → filtered by rule → AI drafts rep
 
 ```
 Trigger: Office 365 Outlook — "When a new email arrives (V3)"
-   └─ Folder: Inbox (or sub-folder)
-   └─ To/Cc, Subject Filter, Importance — native trigger filters
-Condition (optional, in-flow)
-   └─ For rules the trigger can't express (keyword list, multi-sender OR logic)
+   └─ Folder: Inbox only (Junk/spam lands in its own folder — trigger never sees it)
+   └─ To: my address (fires only when I'm a direct recipient, not just Cc'd)
+Condition — system/notification filter
+   └─ Skip AI+draft if sender matches a no-reply/automated pattern
 AI action — draft reply text
    └─ AI Builder "Create text with GPT using a prompt" (default) OR
       Azure OpenAI connector "Get chat completion" (if quota/resource exists)
@@ -24,8 +24,21 @@ Error handling
 ## 2. Trigger config
 
 - Connector: Office 365 Outlook (uses your own mailbox identity — no Azure app registration, unlike Graph API).
-- Filters available directly on the trigger: Folder, Importance, Has Attachment, To, Subject Filter, From.
-- Anything beyond that (e.g. "sender is A OR B OR C", "subject contains any of these 5 keywords") → add a **Condition** action right after the trigger using `contains()` / `or()` expressions, skip AI+draft steps if false.
+- Folder = **Inbox**. Spam already gets routed to Junk Email by Outlook before the trigger ever sees it — no extra filter needed for that.
+- `To` field on the trigger = your address. This restricts firing to emails where you're a direct recipient (not Cc/Bcc-only, not a distribution list you happen to be on unless you're also named in To).
+- **System/notification exclusion** — the trigger has no "sender is NOT X" filter, so this needs a **Condition** action right after the trigger:
+  ```
+  not(or(
+    contains(toLower(triggerBody()?['from']), 'noreply'),
+    contains(toLower(triggerBody()?['from']), 'no-reply'),
+    contains(toLower(triggerBody()?['from']), 'donotreply'),
+    contains(toLower(triggerBody()?['from']), 'notification'),
+    contains(toLower(triggerBody()?['from']), 'automated'),
+    contains(toLower(triggerBody()?['from']), 'alerts@')
+  ))
+  ```
+  If false → terminate flow (no draft). Extend the sender-pattern list as real system senders show up in testing.
+- Any further rule beyond this (specific sender list, subject keywords) → same Condition action, additional `contains()` / `or()` clauses.
 
 ## 3. AI step — two options
 
@@ -71,7 +84,8 @@ Reply:
 
 ## 7. Open decisions (need your input before build)
 
-- Which mailbox rule(s) actually route to this flow — sender list? subject keywords? specific folder?
+- ~~Which mailbox rule(s) route to this flow~~ — decided: any email with me as direct `To` recipient in Inbox, minus system/notification senders (§2).
+- Exact no-reply/system sender pattern list — starter list in §2, refine after first week of real trigger hits.
 - AI Builder vs Azure OpenAI — confirm BD licensing has AI Builder credits available.
 - Failure notification channel — Teams message vs email to self.
 

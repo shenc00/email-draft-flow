@@ -24,6 +24,7 @@ Plan and build a Power Automate flow (Option 2): watch Outlook inbox, filter by 
 
 ### Decisions
 - Repo: shenc00/email-draft-flow, public, at Documents\Github\email-draft-flow
+- Trigger scope: any email with me as direct To recipient, Inbox only, minus system/no-reply senders (see PLAN.md §2)
 
 ### Assumptions
 - User has Power Automate license/connector access to Outlook + an AI connector (Azure OpenAI / Copilot Studio / AI Builder)
