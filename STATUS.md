@@ -8,19 +8,20 @@ Plan and build a Power Automate flow (Option 2): watch Outlook inbox, filter by 
 
 ### Current Phase
 - [x] Planning
-- [ ] Awaiting Approval
-- [ ] Executing
+- [x] Awaiting Approval
+- [x] Executing (paused mid-build)
 - [ ] Testing
 - [ ] Complete
 
 ### Completed Tasks
 - Scaffolded .claude control folder, CLAUDE.md, STATUS.md
+- Wrote Option 2 implementation plan (PLAN.md) — trigger, condition, grounding, AI step, branch, error handling, all decisions resolved
+- Build started via browser-automation subagent (DevOps Automator + agent-browser) against make.powerautomate.com in BD tenant. Flow "Email Draft Flow v1" created and saved, left Off. Subagent was mid-way through re-verifying/configuring the Condition step (§2 no-reply/system-sender filter) when session paused (PC disconnect) — exact per-step completion status not yet confirmed in writing, may land as a follow-up commit if the subagent's final report arrives after this note.
 
 ### Pending Tasks
-- Write Option 2 implementation plan (flow design, trigger, condition, AI action, draft save)
-- Get plan approval
-- Build flow in Power Automate
-- Test end-to-end (trigger → condition → AI draft → Drafts folder)
+- Confirm exact state of Condition step + resume remaining PLAN.md §6 steps (retrieval, AI Builder JSON prompt, Parse JSON, branch, Teams/Create draft actions, error Scope)
+- Test end-to-end (trigger → condition → grounded AI draft or Teams action-item alert)
+- Leave flow Off until user explicitly turns it on
 
 ### Decisions
 - Repo: shenc00/email-draft-flow, public, at Documents\Github\email-draft-flow
@@ -35,7 +36,7 @@ Plan and build a Power Automate flow (Option 2): watch Outlook inbox, filter by 
 - User has Power Automate license/connector access to Outlook
 
 ### Risks
-- None currently blocking
+- Build session paused for PC disconnect — flow left in a partially-configured, saved-but-Off state in the live BD tenant. Verify Condition step config before trusting it on resume.
 
 ### Next Action
-All plan decisions resolved — build per PLAN.md §6.
+Ping to resume: re-check flow "Email Draft Flow v1" in make.powerautomate.com, verify Condition step, continue PLAN.md §6 from wherever it left off. Keep flow Off until fully tested.
