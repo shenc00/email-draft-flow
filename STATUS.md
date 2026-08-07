@@ -28,8 +28,10 @@ Plan and build a Power Automate flow (Option 2): watch Outlook inbox, filter by 
 
 - **Both root causes fixed 2026-08-07 (user, manual)**: SharePoint Online connection reauthorized (Connections page confirms "Sally.Shen@bd.com SharePoint" Connected). Broken duplicate "Send webhook alerts to Sally Shen (You)" flow (the actual spam source, distinct from an unrelated active "meeting minutes" flow of the same name) turned Off. Email Draft Flow v1 should now work end-to-end on next real trigger.
 
+- **First real trigger after both fixes still failed 2026-08-07** — new root cause, different from the SharePoint token issue: an "Automatic reply:" (OOO auto-bounce) email hit the flow. Extract Keywords built `join(take(split(triggerBody()?['subject'], ' '), 4), ' ')` → first 4 words of subject unescaped → `Automatic reply: Documentation for` fed straight into Search SharePoint Site's querytext. SharePoint REST search treats `:` as a KQL property-restriction operator — malformed query → `400 BadRequest: "The query string 'querytext' is missing or invalid"`. Scope failed, all downstream actions Skipped, on-failure Teams alert fired (this one legitimate, from Email Draft Flow v1 itself — not the unrelated webhook-relay flow). **Fixed 2026-08-07**: (1) Condition action extended with 4 new subject-based clauses (`automatic reply`, `out of office`, `auto-reply`, `undeliverable`) so auto-replies/OOO bounces are filtered before reaching Scope at all; (2) Extract Keywords expression now strips `'`, `"`, `:` from the subject before splitting into keywords, so any future subject containing those chars (e.g. normal "Re: Q3 numbers" style subjects) won't break the SharePoint querytext. Both edited live in designer, saved. Not yet re-tested against a real trigger.
+
 ### Pending Tasks
-- Verify actual output (Drafts folder + Teams) on next real inbound email — first real end-to-end test since both fixes
+- Verify actual output (Drafts folder + Teams) on next real inbound email — first real end-to-end test since SharePoint-token fix, OOO-filter fix, and querytext-escaping fix
 - Refine no-reply/system sender pattern list (§2) after a week of real hits, per original open item
 - Optional follow-ups (not blocking): draft signature block, Body length cap, raw-AI-JSON logging, Teams action-item message weblink (no field available in this tenant — may need a workaround or drop permanently), Create draft ConversationId threading
 
@@ -51,4 +53,4 @@ Plan and build a Power Automate flow (Option 2): watch Outlook inbox, filter by 
 - Unrelated pre-existing flow "Send webhook alerts to Sally Shen" (`d7497759-ca5c-4add-8a66-a945b3dc47c3`) is broken (bad Teams thread ID) and produces confusing Teams DMs that read like Email Draft Flow failures but aren't. Out of scope for this project; user may want it fixed or disabled separately to stop the noise.
 
 ### Next Action
-Both blockers fixed (SharePoint reauthorized, spam flow off). Watch next real inbound email — check Drafts folder for grounded reply, or Teams for action-item alert. This is the first real end-to-end test.
+Three fixes now in place (SharePoint reauth, OOO/auto-reply Condition filter, querytext escaping in Extract Keywords). Watch next real inbound email — check Drafts folder for grounded reply, or Teams for action-item alert. Still the first clean end-to-end test.
