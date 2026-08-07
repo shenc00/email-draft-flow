@@ -26,9 +26,10 @@ Plan and build a Power Automate flow (Option 2): watch Outlook inbox, filter by 
 
 - **Root cause of zero drafts found 2026-08-07**: traced a real run (12:36 AM) action-by-action. Outer flow status "Succeeded" was misleading — the retrieval Scope inside actually **Failed**: "Search SharePoint Site" hit `AADSTS700082 — refresh token expired due to inactivity` (SharePoint Online connection token issued 2026-03-24, unused 90 days, expired). Everything downstream (Build referenceMaterial, Run a prompt, Condition 1, Teams alert, Create draft) was **Skipped** as a result — flow never actually produced output on any real trigger despite showing green. Fix needed: reauthorize the SharePoint Online connection (Power Automate → Data → Connections → re-enter credentials), one-time reconnect, not a rebuild. Not yet done — needs user or a sign-in-capable session.
 
+- **Both root causes fixed 2026-08-07 (user, manual)**: SharePoint Online connection reauthorized (Connections page confirms "Sally.Shen@bd.com SharePoint" Connected). Broken duplicate "Send webhook alerts to Sally Shen (You)" flow (the actual spam source, distinct from an unrelated active "meeting minutes" flow of the same name) turned Off. Email Draft Flow v1 should now work end-to-end on next real trigger.
+
 ### Pending Tasks
-- **Reauthorize SharePoint Online connection** (blocking — root cause of zero drafts, see above)
-- Re-verify actual output (Drafts folder + Teams) AFTER reconnecting SharePoint — prior "Succeeded" runs were false positives
+- Verify actual output (Drafts folder + Teams) on next real inbound email — first real end-to-end test since both fixes
 - Refine no-reply/system sender pattern list (§2) after a week of real hits, per original open item
 - Optional follow-ups (not blocking): draft signature block, Body length cap, raw-AI-JSON logging, Teams action-item message weblink (no field available in this tenant — may need a workaround or drop permanently), Create draft ConversationId threading
 
@@ -50,4 +51,4 @@ Plan and build a Power Automate flow (Option 2): watch Outlook inbox, filter by 
 - Unrelated pre-existing flow "Send webhook alerts to Sally Shen" (`d7497759-ca5c-4add-8a66-a945b3dc47c3`) is broken (bad Teams thread ID) and produces confusing Teams DMs that read like Email Draft Flow failures but aren't. Out of scope for this project; user may want it fixed or disabled separately to stop the noise.
 
 ### Next Action
-Email Draft Flow v1 confirmed working (12/12 runs Succeeded). Check Drafts folder and Teams (self) to eyeball actual AI output quality on real emails. Ignore "Email Draft Flow failed..." Teams DMs — those come from the unrelated broken webhook-relay flow above, not this flow.
+Both blockers fixed (SharePoint reauthorized, spam flow off). Watch next real inbound email — check Drafts folder for grounded reply, or Teams for action-item alert. This is the first real end-to-end test.
